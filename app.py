@@ -4,10 +4,9 @@ from fastapi import FastAPI, Body, HTTPException, status
 from fastapi.responses import Response
 from pydantic import ConfigDict, BaseModel, Field, EmailStr
 from pydantic.functional_validators import BeforeValidator
-
 from typing_extensions import Annotated
-
 from bson import ObjectId
+from bson.errors import InvalidId
 import motor.motor_asyncio
 from pymongo import ReturnDocument
 
@@ -15,7 +14,7 @@ from pymongo import ReturnDocument
 app = FastAPI()
 
 # Link to mongoDB 
-# mongo_connection_string is saved in another file and imported here so that it is not added to github as it conatins db password
+# mongo_connection_string is saved in another file and imported here so that it is not added to github as it conatins db password. I have added sensitive.py to the .gitignore file
 client = motor.motor_asyncio.AsyncIOMotorClient(mongo_connection_string)
 
 # This names the DB. Change it to anything that suits - Here it is called test
@@ -28,6 +27,8 @@ user_collection = db.get_collection("users")
 PyObjectId = Annotated[str, BeforeValidator(str)]
 
 
+
+# This is a pydantic data structure. It seems to be a very common way in python to validate data. This basicly defines the structure of what we want to recieve 
 class UserModel(BaseModel):
     id: Optional[PyObjectId] = Field(alias="_id", default=None)
     username: str = Field(...)
@@ -36,6 +37,7 @@ class UserModel(BaseModel):
     interests: str = Field(...)
 
 
+# This is used for our get request. Apparently stops something called json-hijacking
 class UserCollection(BaseModel):
     """
     A container holding a list of `StudentModel` instances.
@@ -44,13 +46,6 @@ class UserCollection(BaseModel):
     """
 
     users: List[UserModel]
-
-
-
-
-
-
-
 
 
 
@@ -81,6 +76,7 @@ async def create_user(user: UserModel = Body(...)):
     return created_user
 
 # Simple get request for all users
+# The response_model=UserCollection ensures that the response is formatted according to the structure set on line 33
 @app.get('/users', response_model=UserCollection,
     response_model_by_alias=False,)
 
@@ -88,3 +84,33 @@ async def create_user(user: UserModel = Body(...)):
 async def list_users():
     # grabs all users from collection using find().to_list(1000)
     return UserCollection(users=await user_collection.find().to_list(1000))
+
+
+# Get a user by ID
+@app.get('/users/{id}',response_model=UserModel,
+    response_model_by_alias=False)
+
+# id: str is just saying we expect the id to be a string
+async def show_user(id: str):
+    # Using a try/except block to catch errors. If the try block errors out then the except block will run
+
+
+    # Error handling to check that the id is a valid format. If I dont add this we just throw 500 error when id is wrong format - This now handles it correctly
+    try:
+        user_id = ObjectId(id)
+    except InvalidId:
+        raise HTTPException(status_code=400, detail='Invalid id format')
+
+
+    try:
+        # Very ugly but is a very smart line of code.
+        # We use a := which is called a walrus operator. It both asigns user and allows us to use it in an expression at the same time. So if user comes back to null then we raise a 404 error else we just return it
+        # Here we are just looking through user_collection which has all our users and looking for a match with the same ID
+        if (user := await user_collection.find_one({"_id": ObjectId(id)})) is not None:
+            return user
+        else:
+            # This is the syntax to handle errors. This sends back the status code and a custom msg
+            raise HTTPException(status_code=404, detail='User not found')
+    except Exception as err:
+        print(err)
+        raise HTTPException(status_code=500, detail='Internal server error')
