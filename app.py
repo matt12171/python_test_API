@@ -1,5 +1,4 @@
 from typing import Optional, List
-from sensitive import mongo_connection_string
 from fastapi import FastAPI, Body, HTTPException, status
 from fastapi.responses import Response
 from pydantic import ConfigDict, BaseModel, Field, EmailStr
@@ -9,13 +8,17 @@ from bson import ObjectId
 from bson.errors import InvalidId
 import motor.motor_asyncio
 from pymongo import ReturnDocument
+from decouple import config
 
 
 app = FastAPI()
 
+MONGO_DETAILS = config("MONGO_DETAILS")
+
+
 # Link to mongoDB 
 # mongo_connection_string is saved in another file and imported here so that it is not added to github as it conatins db password. I have added sensitive.py to the .gitignore file
-client = motor.motor_asyncio.AsyncIOMotorClient(mongo_connection_string)
+client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_DETAILS)
 
 # This names the DB. Change it to anything that suits - Here it is called test
 db = client.test

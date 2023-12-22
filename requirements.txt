@@ -48,3 +48,4 @@ typing-extensions==4.8.0
     #   pydantic-core
 uvicorn==0.23.2
     # via -r requirements.in
+python-decouple==3.6
